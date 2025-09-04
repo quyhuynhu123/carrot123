@@ -1,61 +1,62 @@
 import discord
 import asyncio
-import os  # Import thư viện 'os'
+import os
 
-async def send_message(client, channel_id, message, delay):
-    await asyncio.sleep(delay)
-    channel = client.get_channel(channel_id)
-    if channel:
-        try:
-            await channel.send(message)
-            print(f"✅ Đã gửi tin nhắn tới channel {channel_id}: {message}")
-        except discord.Forbidden:
-            print(f"❌ Không có quyền gửi tin nhắn tới channel {channel_id}")
-        except discord.HTTPException as e:
-            print(f"❌ Lỗi khi gửi tin nhắn tới channel {channel_id}: {e}")
-    else:
-        print(f"❌ Không tìm thấy kênh với ID {channel_id}")
+# KHÔNG CÓ INTENTS (hoặc ALL)! Điều này rất quan trọng cho self-bots.
+client = discord.Client()
 
-async def main():
-    intents = discord.Intents.default()
-    client = discord.Client(intents=intents)
+# Định dạng cấu hình
+CONFIG = {
+    "TOKEN": os.environ.get("DISCORD_BOT_TOKEN"),  # Lấy token từ biến môi trường (khuyến nghị)
+    "MESSAGES": [
+        {
+            "channel_id": 123456789012345678,  # Thay bằng ID kênh thực
+            "content": "📢 Nội dung 1 - gửi đến channel 1",
+            "delay": 5 # Delay giữa các tin nhắn (tùy chọn)
+        },
+        {
+            "channel_id": 876543210987654321,  # Thay bằng ID kênh thực
+            "content": "📢 Nội dung 2 - gửi đến channel 2",
+            "delay": 10 # Delay giữa các tin nhắn (tùy chọn)
+        },
+        # Thêm các tin nhắn khác vào đây
+    ]
+}
 
-    @client.event
-    async def on_ready():
-        print(f'Logged in as {client.user}')
+@client.event
+async def on_ready():
+    print(f"Self-bot đã đăng nhập với tên: {client.user.name}")
 
-        # Định nghĩa các channel và nội dung tương ứng
-        content1_channels = [123456789012345678, 876543210987654321, 246801357924680135]  # Thay bằng ID thực
-        content2_channels = [246801357924680135, 111111111111111111, 222222222222222222]  # Thay bằng ID thực
-
-        content1 = "📢 Nội dung 1 - gửi đến channel 1,2,3"
-        content2 = "📢 Nội dung 2 - gửi đến channel 3,4,5"
-
-        delay = 5  # Delay giữa mỗi tin nhắn, tính bằng giây
-
-        # Gửi nội dung 1 đến các channel chỉ định
-        for i, channel_id in enumerate(content1_channels):
-            await send_message(client, channel_id, content1, i * delay)
-
-        # Gửi nội dung 2 đến các channel chỉ định
-        for i, channel_id in enumerate(content2_channels):
-            await send_message(client, channel_id, content2, (len(content1_channels) + i) * delay)
-
-        # Đợi một chút trước khi đóng client
-        total_messages = len(content1_channels) + len(content2_channels)
-        await asyncio.sleep(total_messages * delay + 2)
-        await client.close()
-
-    # Lấy token từ biến môi trường
-    TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
-    if not TOKEN:
+    # Kiểm tra xem token có hợp lệ không
+    if not CONFIG["TOKEN"]:
         print("Lỗi: Chưa thiết lập biến môi trường DISCORD_BOT_TOKEN")
         return
 
-    await client.start(TOKEN)
+    # Duyệt qua danh sách tin nhắn
+    for message_config in CONFIG["MESSAGES"]:
+        channel_id = message_config.get("channel_id") #Sử dụng .get() để tránh lỗi KeyError nếu channel_id bị thiếu
+        content = message_config.get("content") #Sử dụng .get() để tránh lỗi KeyError nếu content bị thiếu
+        delay = message_config.get("delay", 0) # Lấy delay từ cấu hình, mặc định là 0 nếu không có
 
-if __name__ == "__main__":
-    from keep_alive import keep_alive
-    keep_alive()
-    asyncio.run(main())
+        if not channel_id or not content:
+            print("Lỗi: channel_id hoặc content bị thiếu trong cấu hình tin nhắn.")
+            continue  # Chuyển sang tin nhắn tiếp theo
 
+        channel = client.get_channel(int(channel_id))  # Chuyển đổi channel_id thành số nguyên
+        if channel:
+            await asyncio.sleep(delay) # Chờ đợi trước khi gửi (nếu có delay)
+            try:
+                await channel.send(content)
+                print(f"Đã gửi: {content} đến channel {channel_id}")
+            except discord.errors.Forbidden:
+                print(f"Không có quyền gửi tin nhắn đến channel {channel_id}")
+            except Exception as e:
+                print(f"Lỗi khi gửi tin nhắn đến channel {channel_id}: {e}")
+        else:
+            print(f"Không tìm thấy channel với ID {channel_id}")
+
+    print("Đã gửi tất cả tin nhắn.")
+    await client.close()  # Đóng client sau khi gửi tất cả tin nhắn
+
+# Khởi động bot
+client.run(CONFIG["TOKEN"])
